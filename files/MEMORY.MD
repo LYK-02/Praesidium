@@ -13,8 +13,8 @@
 | Phase | Description | Target Window | Status | Exit Gate |
 |---|---|---|---|---|
 | **Phase 0** | **Setup & Sandbox Validation** | Oct 9–11 | **COMPLETED** | Repo setup, `.gitignore`, `.env.example`, sandbox findings documented, API contracts verified. |
-| **Phase 1** | **Foundation (Core Shell & Config)** | Oct 12–16 | **NEXT** | Next.js + TS strict + Tailwind + Drizzle + SQLite + Auth gate + Design tokens. |
-| **Phase 2** | **PayPal Integration & Webhooks** | Oct 17–23 | Pending | Webhooks, state machine, provide-evidence & accept-claim executors, idempotency. |
+| **Phase 1** | **Foundation (Core Shell & Config)** | Oct 12–16 | **COMPLETED** | Next.js + TS strict + Tailwind + Drizzle + SQLite + Auth gate + Design tokens + Health check. |
+| **Phase 2** | **PayPal Integration & Webhooks** | Oct 17–23 | **NEXT** | Webhooks, state machine, provide-evidence & accept-claim executors, idempotency. |
 | **Phase 3** | **Agent & Evidence Providers** | Oct 24–30 | Pending | Evidence providers, reason playbooks, LLM structured analysis (NIM), guardrails, SSE stream. |
 | **Phase 4** | **Dashboard & UX** | Oct 31–Nov 4 | Pending | AG Grid dark theme, stat cards, urgency strip, dispute detail 3-column hero, audit view. |
 | **Phase 5** | **Hardening & Docs** | Nov 5–7 | Pending | Security checklist, Playwright happy path, README (< 10 min setup), seed-on-boot. |
@@ -24,15 +24,16 @@
 
 ## 3. Technology Stack & Key Decisions
 
-- **Framework:** Next.js (App Router) + TypeScript Strict (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`).
-- **Database:** SQLite (`better-sqlite3`) + Drizzle ORM (Zero infra, self-contained for judges).
+- **Framework:** Next.js 16 (App Router) + TypeScript Strict (`noUncheckedIndexedAccess`, `noImplicitOverride`).
+- **Database:** SQLite (`better-sqlite3` in WAL mode) + Drizzle ORM (Zero infra, 8 tables auto-bootstrapped).
 - **AI Engine:** NVIDIA NIM (`LLM_PROVIDER=nvidia-nim`, base URL `https://integrate.api.nvidia.com/v1`, key `NVIDIA_NIM_API_KEY`, model `meta/llama-3.3-70b-instruct`) using `@ai-sdk/openai` with structured outputs (`generateObject` + Zod).
 - **PayPal Client:** Typed REST client targeting `https://api-m.sandbox.paypal.com` with OAuth client credentials in-memory caching and `PayPal-Request-Id` idempotency.
-- **UI Design System:** Minimalist Dark:
+- **UI Design System:** Minimalist Dark per `08-DESIGN.md`:
   - Surfaces: `#0A0A0F`, `#12121A`, `#1A1A24`, glass card `rgba(26,26,36,0.6)`
   - Accent: Amber `#F59E0B`
   - Typography: Space Grotesk (display), Inter (sans), JetBrains Mono (data/IDs/money/logs)
-  - Grid: AG Grid React Community with Quartz theme customized via Theming API.
+  - Components: Button, Card, Badge (status pills), Input, AppShell.
+- **Security & Auth:** Single-admin login gate (`/login`) with `jose` JWT HttpOnly session cookie, security headers (CSP, frame-ancestors deny, strict nosniff), and PII/token redaction on all audit log writes.
 - **Workflow & Review:** Conventional Commits (`type(scope): message`) enforced on all commits; CodeRabbit review (`coderabbit review --plain` / `cr review --plain`) + zero secret leaks pre-check mandated before committing.
 
 ---
@@ -57,8 +58,32 @@
 
 ---
 
-## 5. Next Immediate Action: Phase 1 Kickoff
-- Initialize Next.js project with TypeScript strict, Tailwind CSS, Lucide React, and AG Grid.
-- Configure Zod environment parsing (`src/server/config/env.ts`) integrating NVIDIA NIM credentials.
-- Set up SQLite schema with Drizzle ORM (`src/server/db/schema.ts`).
-- Build design tokens in Tailwind and CSS variables as defined in `08-DESIGN.md`.
+## 5. Phase 1 Foundation Summary & Verification
+
+1. **Scaffolding & Config**:
+   - Next.js 16 App Router, TypeScript strict, PostCSS, and Tailwind CSS configured with exact color tokens, glowing shadows, and typography tokens from `08-DESIGN.md`.
+   - Environment parsing via Zod (`src/server/config/env.ts`) hard-guarding live host unless explicitly enabled.
+2. **Database & Schema**:
+   - Drizzle ORM schema with 8 core tables: `disputes`, `webhook_events`, `evidence_items`, `decisions`, `actions`, `audit_log`, `jobs`, `settings`.
+   - Auto-bootstrap on boot via `src/server/db/client.ts`.
+3. **PayPal Client Skeleton**:
+   - `src/server/paypal/client.ts` with OAuth token caching, exponential backoff for 429/5xx, idempotency headers, and audit logger integration.
+4. **Auth Gate & Middleware**:
+   - `/login` with atmospheric glassmorphism and amber CTA.
+   - `src/middleware.ts` protecting internal pages and mutating routes.
+   - `/api/health` reporting subsystem health (PayPal sandbox connected, LLM NIM configured).
+5. **Gate Verification**:
+   - `pnpm typecheck` passed (0 errors).
+   - `pnpm build` passed (all routes compiled in 3.2s).
+   - Health endpoint tested live (`status: healthy`, `paypal: connected`).
+   - Login tested live (wrong password -> 401; correct password -> 200 + secure HttpOnly JWT session cookie).
+   - Audit logging tested live (persisted to SQLite `audit_log` with PII redaction).
+
+---
+
+## 6. Next Immediate Action: Phase 2 (PayPal Integration & Webhooks)
+- Ingest and sync disputes from PayPal Sandbox into SQLite `disputes` table.
+- Build webhook endpoint (`POST /api/webhooks/paypal`): signature verification, deduplication by event id, durable write.
+- Implement dispute state machine and in-process queue (`p-queue`).
+- Implement mutation executors: `provide-evidence` and `accept-claim` with `PayPal-Request-Id` and audit log trails.
+- Create webhook simulation script (`scripts/simulate-webhook.ts`).
