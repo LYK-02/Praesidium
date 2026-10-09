@@ -1,6 +1,6 @@
 # Praesidium — Project Rules (for you and any AI coding assistant)
 
-Drop this file in the repo root as `RULES.md` (or copy into `CLAUDE.md` / `.cursorrules`). These rules override convenience.
+These rules override convenience.
 
 ## 0. Prime directives
 1. **Sandbox only.** Never call live PayPal. Never ask for or store live credentials.

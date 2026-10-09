@@ -33,6 +33,7 @@
   - Accent: Amber `#F59E0B`
   - Typography: Space Grotesk (display), Inter (sans), JetBrains Mono (data/IDs/money/logs)
   - Grid: AG Grid React Community with Quartz theme customized via Theming API.
+- **Workflow & Review:** Conventional Commits (`type(scope): message`) enforced on all commits; CodeRabbit review (`coderabbit review --plain` / `cr review --plain`) + zero secret leaks pre-check mandated before committing.
 
 ---
 
