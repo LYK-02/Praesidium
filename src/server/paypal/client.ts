@@ -1,6 +1,13 @@
 import { env } from '../config/env';
 import { getPayPalAccessToken } from './auth';
-import { PayPalError, DisputesListResponseSchema, type DisputesListResponse } from './types';
+import {
+  PayPalError,
+  DisputesListResponseSchema,
+  type DisputesListResponse,
+  type ProvideEvidenceInput,
+  type AcceptClaimInput,
+  type WebhookHeaders,
+} from './types';
 import { logAudit } from '../audit/logger';
 import crypto from 'node:crypto';
 
@@ -103,6 +110,133 @@ export class PayPalClient {
       detail: { disputeId },
     });
     return data;
+  }
+
+  /**
+   * Submits structured dispute evidence (e.g. proof of fulfillment/delivery with tracking).
+   * Guarded by PayPal-Request-Id idempotency.
+   */
+  public async provideEvidence(
+    disputeId: string,
+    payload: ProvideEvidenceInput,
+    idempotencyKey?: string
+  ): Promise<Record<string, unknown>> {
+    const requestId = idempotencyKey || crypto.randomUUID();
+    const endpoint = `/v1/customer/disputes/${disputeId}/provide-evidence`;
+
+    await logAudit({
+      disputeId,
+      actor: 'agent',
+      event: 'paypal_provide_evidence_initiated',
+      detail: { disputeId, evidenceType: payload.evidence_type, idempotencyKey: requestId },
+    });
+
+    const headers: Record<string, string> = {
+      'PayPal-Request-Id': requestId,
+    };
+
+    const res = await this.request<Record<string, unknown>>(endpoint, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+
+    await logAudit({
+      disputeId,
+      actor: 'agent',
+      event: 'paypal_provide_evidence_success',
+      detail: { disputeId, idempotencyKey: requestId },
+    });
+
+    return res;
+  }
+
+  /**
+   * Accepts buyer claim, issuing a full refund and closing the dispute.
+   * Guarded by PayPal-Request-Id idempotency.
+   */
+  public async acceptClaim(
+    disputeId: string,
+    payload: AcceptClaimInput,
+    idempotencyKey?: string
+  ): Promise<Record<string, unknown>> {
+    const requestId = idempotencyKey || crypto.randomUUID();
+    const endpoint = `/v1/customer/disputes/${disputeId}/accept-claim`;
+
+    await logAudit({
+      disputeId,
+      actor: 'agent',
+      event: 'paypal_accept_claim_initiated',
+      detail: { disputeId, reason: payload.accept_claim_reason, idempotencyKey: requestId },
+    });
+
+    const headers: Record<string, string> = {
+      'PayPal-Request-Id': requestId,
+    };
+
+    const res = await this.request<Record<string, unknown>>(endpoint, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+
+    await logAudit({
+      disputeId,
+      actor: 'agent',
+      event: 'paypal_accept_claim_success',
+      detail: { disputeId, idempotencyKey: requestId },
+    });
+
+    return res;
+  }
+
+  /**
+   * Verifies incoming webhook signature against PayPal's verification API.
+   */
+  public async verifyWebhookSignature(
+    headers: WebhookHeaders,
+    body: Record<string, unknown>
+  ): Promise<boolean> {
+    const endpoint = '/v1/notifications/verify-webhook-signature';
+    const payload = {
+      auth_algo: headers.auth_algo,
+      cert_url: headers.cert_url,
+      transmission_id: headers.transmission_id,
+      transmission_sig: headers.transmission_sig,
+      transmission_time: headers.transmission_time,
+      webhook_id: headers.webhook_id,
+      webhook_event: body,
+    };
+
+    try {
+      const result = await this.request<{ verification_status: string }>(endpoint, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+
+      const isVerified = result.verification_status?.toUpperCase() === 'SUCCESS';
+      await logAudit({
+        actor: 'system',
+        event: 'paypal_webhook_signature_verified',
+        detail: {
+          transmissionId: headers.transmission_id,
+          status: result.verification_status,
+          isVerified,
+        },
+      });
+
+      return isVerified;
+    } catch (err) {
+      await logAudit({
+        actor: 'system',
+        event: 'paypal_webhook_signature_error',
+        detail: {
+          error: err instanceof Error ? err.message : String(err),
+          transmissionId: headers.transmission_id,
+        },
+      });
+      return false;
+    }
   }
 
   public async healthCheck(): Promise<{ ok: boolean; env: string; status: number }> {

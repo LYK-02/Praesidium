@@ -14,8 +14,8 @@
 |---|---|---|---|---|
 | **Phase 0** | **Setup & Sandbox Validation** | Oct 9–11 | **COMPLETED** | Repo setup, `.gitignore`, `.env.example`, sandbox findings documented, API contracts verified. |
 | **Phase 1** | **Foundation (Core Shell & Config)** | Oct 12–16 | **COMPLETED** | Next.js + TS strict + Tailwind + Drizzle + SQLite + Auth gate + Design tokens + Health check. |
-| **Phase 2** | **PayPal Integration & Webhooks** | Oct 17–23 | **NEXT** | Webhooks, state machine, provide-evidence & accept-claim executors, idempotency. |
-| **Phase 3** | **Agent & Evidence Providers** | Oct 24–30 | Pending | Evidence providers, reason playbooks, LLM structured analysis (NIM), guardrails, SSE stream. |
+| **Phase 2** | **PayPal Integration & Webhooks** | Oct 17–23 | **COMPLETED** | Webhooks, state machine, provide-evidence & accept-claim executors, idempotency, test suite green. |
+| **Phase 3** | **Agent & Evidence Providers** | Oct 24–30 | **NEXT** | Evidence providers, reason playbooks, LLM structured analysis (NIM), guardrails, SSE stream. |
 | **Phase 4** | **Dashboard & UX** | Oct 31–Nov 4 | Pending | AG Grid dark theme, stat cards, urgency strip, dispute detail 3-column hero, audit view. |
 | **Phase 5** | **Hardening & Docs** | Nov 5–7 | Pending | Security checklist, Playwright happy path, README (< 10 min setup), seed-on-boot. |
 | **Phase 6** | **Video & Submission** | Nov 8–10 | Pending | Demo video (≤ 3 min), Devpost submission, clean repo check. |
@@ -81,9 +81,45 @@
 
 ---
 
-## 6. Next Immediate Action: Phase 2 (PayPal Integration & Webhooks)
-- Ingest and sync disputes from PayPal Sandbox into SQLite `disputes` table.
-- Build webhook endpoint (`POST /api/webhooks/paypal`): signature verification, deduplication by event id, durable write.
-- Implement dispute state machine and in-process queue (`p-queue`).
-- Implement mutation executors: `provide-evidence` and `accept-claim` with `PayPal-Request-Id` and audit log trails.
-- Create webhook simulation script (`scripts/simulate-webhook.ts`).
+## 6. Phase 2 PayPal Integration & Webhooks Summary & Verification
+
+1. **Money & Date Utilities**:
+   - `src/lib/money.ts`: Integer minor units (cents) conversion, avoiding floating-point errors, ISO currency formatting.
+   - `src/lib/dates.ts`: UTC ISO-8601 timestamps, `hoursRemaining`, `formatRemainingTime`, and deadline urgency flags.
+   - `src/lib/errors.ts` & `src/lib/result.ts`: Typed domain errors and `Result<T, E>` pattern.
+2. **PayPal Client Expansion**:
+   - `provideEvidence`: Structured JSON fulfillment/delivery evidence submission targeting `/v1/customer/disputes/{id}/provide-evidence` with `PayPal-Request-Id` idempotency.
+   - `acceptClaim`: Refund and liability settlement targeting `/v1/customer/disputes/{id}/accept-claim` with idempotency.
+   - `verifyWebhookSignature`: Verifies incoming webhook signatures against PayPal's verification API.
+3. **Dispute Lifecycle State Machine**:
+   - `src/server/disputes/state-machine.ts`: Deterministic transitions (`received` → `classified` → `evidence_collecting` → `analysed` → `awaiting_approval` → `submitted` / `accepted` / `needs_human` → `resolved`).
+   - Guarded illegal transitions throwing `StateTransitionError`. Emits audit log on each state change.
+4. **Dispute Ingestion & Sync Service**:
+   - `src/server/disputes/sync.ts`: Synchronizes disputes from sandbox, converts amounts to integer minor units, normalizes stages/reasons, persists redacted payload.
+5. **Durable Job Queue**:
+   - `src/server/jobs/queue.ts`: Asynchronous in-process queue powered by `p-queue` backed by SQLite `jobs` table with exponential backoff retries and dead-letter handling.
+6. **Mutating Action Executors**:
+   - `src/server/actions/executor.ts`: `executeProvideEvidence` and `executeAcceptClaim` with replay protection via local `idempotencyKey` checking and database audit logging.
+7. **Webhook Endpoint & Simulation**:
+   - `POST /api/webhooks/paypal`: Content-Type validation, signature verification, event deduplication by ID, durable insert into `webhook_events`, fast 200 response, background job enqueueing.
+   - Simulation tool: `scripts/simulate-webhook.ts` and `scripts/simulate-webhook.mjs`.
+8. **Internal API Routes**:
+   - `POST /api/sync`: Pulls sandbox disputes on demand.
+   - `GET /api/disputes`: Filtered and paginated dispute query.
+   - `GET /api/disputes/[id]`: Full dispute details, evidence, decisions, actions, and audit trail.
+   - `POST /api/disputes/[id]/approve`: Authorizes and submits evidence to PayPal.
+   - `POST /api/disputes/[id]/accept`: Authorizes and refunds/closes claim.
+9. **Exit Gate Verification**:
+   - `pnpm typecheck` passed (0 errors).
+   - `pnpm test` passed (23 unit & integration tests across 5 test suites).
+   - `pnpm build` passed (production compilation in ~3.2s).
+
+---
+
+## 7. Next Immediate Action: Phase 3 (Agent & Evidence Providers)
+- Build evidence provider interface and mock providers (`tracking`, `delivery_proof`, `order_history`, `chat_log`).
+- Reason playbooks per PayPal dispute category.
+- LLM structured analysis using NVIDIA NIM (`meta/llama-3.3-70b-instruct`) via `@ai-sdk/openai` + Zod `DecisionSchema`.
+- Deterministic guardrails (code rules over prompt).
+- Realtime Server-Sent Events (SSE) stream (`GET /api/disputes/[id]/stream`).
+
