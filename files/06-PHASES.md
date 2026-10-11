@@ -25,13 +25,13 @@ Each phase has an exit gate. Do not start the next phase until the gate passes (
 **Gate:** `pnpm dev` shows styled shell behind login; CI green.
 
 ## Phase 2 — PayPal integration (Oct 17–23)
-- [ ] Sync disputes → DB; map PayPal enums to domain types
-- [ ] Webhook endpoint: verify, dedupe, store, enqueue
-- [ ] Job queue + dispute state machine
-- [ ] Executors: provide-evidence, accept-claim (idempotent, audited)
-- [ ] `scripts/simulate-webhook.ts` + MSW fixtures from real responses
+- [x] Sync disputes → DB; map PayPal enums to domain types
+- [x] Webhook endpoint: verify, dedupe, store, enqueue
+- [x] Job queue + dispute state machine
+- [x] Executors: provide-evidence, accept-claim (idempotent, audited)
+- [x] `scripts/simulate-webhook.ts` + simulation fixtures & comprehensive integration tests
 
-**Gate:** Real webhook → stored → state transition; evidence submit works against sandbox (or documented fallback).
+**Gate:** Real webhook → stored → state transition; evidence submit works against sandbox (or documented fallback). (PASSED)
 
 ## Phase 3 — Agent (Oct 24–30)
 - [ ] Evidence provider interface + mock providers (tracking, delivery proof, chat log, order history)

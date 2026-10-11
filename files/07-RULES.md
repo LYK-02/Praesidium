@@ -41,6 +41,8 @@ Drop this file in the repo root as `RULES.md` (or copy into `CLAUDE.md` / `.curs
 
 ## 4. Workflow rules
 - Branch per task; Conventional Commits; squash merge.
+- Inspect staged files: verify zero secrets or unvetted files.
+- Run CodeRabbit review (`coderabbit review --plain` or `cr review --plain`) on changes before committing.
 - Run `pnpm typecheck && pnpm lint && pnpm test` before every push.
 - Prefer deleting code over adding code.
 - When blocked > 30 min, write down the question, pick a fallback, move on.
