@@ -7,6 +7,9 @@ import {
   type ProvideEvidenceInput,
   type AcceptClaimInput,
   type WebhookHeaders,
+  PayPalWebhookSchema,
+  ListWebhooksResponseSchema,
+  type PayPalWebhook,
 } from './types';
 import { logAudit } from '../audit/logger';
 import crypto from 'node:crypto';
@@ -237,6 +240,64 @@ export class PayPalClient {
       });
       return false;
     }
+  }
+
+  /**
+   * Lists all registered webhooks.
+   */
+  public async listWebhooks(): Promise<PayPalWebhook[]> {
+    const data = await this.request<unknown>('/v1/notifications/webhooks');
+    const parsed = ListWebhooksResponseSchema.safeParse(data);
+    if (!parsed.success) {
+      await logAudit({
+        actor: 'system',
+        event: 'paypal_list_webhooks_warning',
+        detail: { errors: parsed.error.format() },
+      });
+      return ((data as { webhooks?: PayPalWebhook[] })?.webhooks) || [];
+    }
+    return parsed.data.webhooks;
+  }
+
+  /**
+   * Registers a new webhook with specified event types.
+   */
+  public async createWebhook(url: string, eventNames: string[]): Promise<PayPalWebhook> {
+    const payload = {
+      url,
+      event_types: eventNames.map((name) => ({ name })),
+    };
+    const data = await this.request<unknown>('/v1/notifications/webhooks', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    const parsed = PayPalWebhookSchema.safeParse(data);
+    if (!parsed.success) {
+      return data as PayPalWebhook;
+    }
+    return parsed.data;
+  }
+
+  /**
+   * Updates an existing webhook's URL using JSON Patch.
+   */
+  public async updateWebhookUrl(webhookId: string, newUrl: string): Promise<PayPalWebhook> {
+    const patchPayload = [
+      {
+        op: 'replace',
+        path: '/url',
+        value: newUrl,
+      },
+    ];
+    const data = await this.request<unknown>(`/v1/notifications/webhooks/${webhookId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patchPayload),
+    });
+    const parsed = PayPalWebhookSchema.safeParse(data);
+    if (!parsed.success) {
+      return data as PayPalWebhook;
+    }
+    return parsed.data;
   }
 
   public async healthCheck(): Promise<{ ok: boolean; env: string; status: number }> {

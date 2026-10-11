@@ -80,6 +80,21 @@ export const WebhookEventSchema = z.object({
   resource: z.record(z.string(), z.unknown()),
 });
 
+export const PayPalWebhookSchema = z.object({
+  id: z.string(),
+  url: z.string(),
+  event_types: z.array(z.object({
+    name: z.string(),
+    description: z.string().optional(),
+    status: z.string().optional(),
+  })),
+  links: z.array(z.object({ href: z.string(), rel: z.string(), method: z.string().optional() })).optional(),
+});
+
+export const ListWebhooksResponseSchema = z.object({
+  webhooks: z.array(PayPalWebhookSchema).optional().default([]),
+});
+
 export type Money = z.infer<typeof MoneySchema>;
 export type DisputeSummary = z.infer<typeof DisputeSummarySchema>;
 export type DisputesListResponse = z.infer<typeof DisputesListResponseSchema>;
@@ -88,6 +103,8 @@ export type ProvideEvidenceInput = z.infer<typeof ProvideEvidenceInputSchema>;
 export type AcceptClaimInput = z.infer<typeof AcceptClaimInputSchema>;
 export type WebhookHeaders = z.infer<typeof WebhookHeadersSchema>;
 export type WebhookEvent = z.infer<typeof WebhookEventSchema>;
+export type PayPalWebhook = z.infer<typeof PayPalWebhookSchema>;
+export type ListWebhooksResponse = z.infer<typeof ListWebhooksResponseSchema>;
 
 export class PayPalError extends Error {
   public statusCode: number;

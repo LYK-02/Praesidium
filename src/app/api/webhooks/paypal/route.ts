@@ -54,11 +54,30 @@ export async function POST(req: NextRequest) {
     const transmissionSig = req.headers.get('paypal-transmission-sig');
     const transmissionTime = req.headers.get('paypal-transmission-time');
 
+    // Check if PAYPAL_WEBHOOK_ID is configured
+    const webhookId = env.PAYPAL_WEBHOOK_ID?.trim();
+    if (!webhookId || webhookId === 'WEBHOOK_ID_PLACEHOLDER' || webhookId.includes('placeholder') || webhookId.includes('your_')) {
+      await logAudit({
+        actor: 'system',
+        event: 'webhook_rejected',
+        detail: {
+          eventId: event.id,
+          reason: 'PAYPAL_WEBHOOK_ID is unconfigured or a placeholder. Run pnpm webhook:register',
+        },
+      });
+      return NextResponse.json(
+        {
+          error: 'Webhook verification unavailable: PAYPAL_WEBHOOK_ID is unconfigured or a placeholder. Run pnpm webhook:register to configure.',
+        },
+        { status: 500 }
+      );
+    }
+
     if (!authAlgo || !certUrl || !transmissionId || !transmissionSig || !transmissionTime) {
       await logAudit({
         actor: 'system',
-        event: 'webhook_missing_headers',
-        detail: { eventId: event.id, eventType: event.event_type },
+        event: 'webhook_rejected',
+        detail: { eventId: event.id, eventType: event.event_type, reason: 'Missing PayPal verification headers' },
       });
       return NextResponse.json({ error: 'Missing PayPal verification headers' }, { status: 400 });
     }
@@ -69,11 +88,20 @@ export async function POST(req: NextRequest) {
       transmission_id: transmissionId,
       transmission_sig: transmissionSig,
       transmission_time: transmissionTime,
-      webhook_id: env.PAYPAL_WEBHOOK_ID || 'WEBHOOK_ID_PLACEHOLDER',
+      webhook_id: webhookId,
     };
 
     const isVerified = await payPalClient.verifyWebhookSignature(headers, body as Record<string, unknown>);
     if (!isVerified) {
+      await logAudit({
+        actor: 'system',
+        event: 'webhook_rejected',
+        detail: {
+          eventId: event.id,
+          transmissionId,
+          reason: 'PayPal webhook signature verification failed (forged or invalid signature)',
+        },
+      });
       return NextResponse.json({ error: 'Invalid webhook signature' }, { status: 400 });
     }
   }
