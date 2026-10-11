@@ -15,7 +15,6 @@ import {
   ChevronRight,
   Menu,
   X,
-  Sparkles
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -130,19 +129,7 @@ export function AppShell({ children }: AppShellProps) {
         </div>
 
         {/* Sidebar Footer */}
-        <div className="p-4 border-t border-border/60 space-y-3">
-          <div className="px-3 py-2 rounded-lg bg-muted/60 border border-border text-xs">
-            <div className="flex items-center justify-between text-muted-foreground mb-1">
-              <span>LLM Engine</span>
-              <span className="font-mono text-amber-400 font-semibold flex items-center gap-1">
-                <Sparkles className="w-3 h-3" /> NIM
-              </span>
-            </div>
-            <p className="font-mono text-[10px] text-zinc-400 truncate">
-              Llama-3.3-70b-instruct
-            </p>
-          </div>
-
+        <div className="p-4 border-t border-border/60">
           <button
             onClick={handleLogout}
             className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-muted-foreground hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
